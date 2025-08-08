@@ -1,0 +1,29 @@
+# Development override for docker-compose
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    environment:
+      NODE_ENV: development
+      LOG_LEVEL: debug
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - ./logs:/app/logs
+    command: npm run dev
+    ports:
+      - "3000:3000"
+      - "9229:9229"  # Debug port
+
+  # Additional development services
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: ecosense-mailhog
+    ports:
+      - "1025:1025"  # SMTP
+      - "8025:8025"  # Web UI
+    networks:
+      - ecosense-network

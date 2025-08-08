@@ -1,0 +1,28 @@
+# Development Dockerfile for EcoSense.ai
+FROM node:18-alpine
+
+# Install dumb-init for proper signal handling
+RUN apk add --no-cache dumb-init
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install all dependencies (including dev dependencies)
+RUN npm install
+
+# Create logs directory
+RUN mkdir -p logs
+
+# Expose port and debug port
+EXPOSE 3000 9229
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
+
+# Start the application in development mode
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["npm", "run", "dev"]

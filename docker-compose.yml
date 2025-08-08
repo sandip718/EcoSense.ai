@@ -1,0 +1,117 @@
+version: '3.8'
+
+services:
+  # PostgreSQL with PostGIS
+  postgres:
+    image: postgis/postgis:15-3.3
+    container_name: ecosense-postgres
+    environment:
+      POSTGRES_DB: ecosense_ai
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - ecosense-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ecosense_ai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: ecosense-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ecosense-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    command: redis-server --appendonly yes
+
+  # RabbitMQ (for message queuing)
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: ecosense-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ecosense
+      RABBITMQ_DEFAULT_PASS: password
+    ports:
+      - "5672:5672"
+      - "15672:15672"  # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - ecosense-network
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 30s
+      retries: 3
+
+  # EcoSense.ai Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ecosense-app
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ecosense_ai
+      DB_USER: postgres
+      DB_PASSWORD: password
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      RABBITMQ_URL: amqp://ecosense:password@rabbitmq:5672
+      LOG_LEVEL: info
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - ecosense-network
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+
+  # Development tools (optional)
+  adminer:
+    image: adminer:4
+    container_name: ecosense-adminer
+    ports:
+      - "8080:8080"
+    networks:
+      - ecosense-network
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+
+networks:
+  ecosense-network:
+    driver: bridge
