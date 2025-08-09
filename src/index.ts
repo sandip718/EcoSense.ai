@@ -2,10 +2,10 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
-import { logger } from '@/utils/logger';
-import { connectDatabase } from '@/config/database';
-import { connectRedis } from '@/config/redis';
-import { errorHandler } from '@/middleware/errorHandler';
+import { logger } from './utils/logger';
+import { connectDatabase } from './config/database';
+import { connectRedis } from './config/redis';
+import { errorHandler } from './middleware/errorHandler';
 
 // Load environment variables
 dotenv.config();

@@ -10,7 +10,12 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "lint": "eslint src/**/*.ts",
-    "lint:fix": "eslint src/**/*.ts --fix"
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "migrate": "ts-node scripts/migrate.ts",
+    "migrate:status": "ts-node scripts/migrate.ts status",
+    "migrate:up": "ts-node scripts/migrate.ts up",
+    "migrate:rollback": "ts-node scripts/migrate.ts rollback",
+    "test:implementation": "ts-node src/test-implementation.ts"
   },
   "keywords": ["environment", "pollution", "monitoring", "ai", "community"],
   "author": "EcoSense.ai Team",

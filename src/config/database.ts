@@ -1,7 +1,9 @@
 import { Pool, PoolConfig } from 'pg';
-import { logger } from '@/utils/logger';
+import { logger } from '../utils/logger';
+import { MigrationRunner } from '../utils/migrations';
 
 let pool: Pool;
+let migrationRunner: MigrationRunner;
 
 const dbConfig: PoolConfig = {
   host: process.env.DB_HOST || 'localhost',
@@ -24,6 +26,14 @@ export async function connectDatabase(): Promise<void> {
     await client.query('SELECT NOW()');
     client.release();
     
+    // Initialize migration runner
+    migrationRunner = new MigrationRunner();
+    
+    // Run pending migrations if in development
+    if (process.env.NODE_ENV !== 'production') {
+      await migrationRunner.runPendingMigrations();
+    }
+    
     logger.info('PostgreSQL database connected successfully');
   } catch (error) {
     logger.error('Failed to connect to PostgreSQL database:', error);
@@ -36,6 +46,13 @@ export function getDatabase(): Pool {
     throw new Error('Database not initialized. Call connectDatabase() first.');
   }
   return pool;
+}
+
+export function getMigrationRunner(): MigrationRunner {
+  if (!migrationRunner) {
+    throw new Error('Migration runner not initialized. Call connectDatabase() first.');
+  }
+  return migrationRunner;
 }
 
 export async function closeDatabaseConnection(): Promise<void> {
