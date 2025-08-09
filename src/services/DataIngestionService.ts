@@ -2,6 +2,7 @@ import { EnvironmentalDataPoint, CreateEnvironmentalDataPoint } from '../models/
 import { OpenAQClient } from './clients/OpenAQClient';
 import { WaterQualityPortalClient } from './clients/WaterQualityPortalClient';
 import { MessageQueuePublisher } from './messaging/MessageQueuePublisher';
+import { DataQualityService, QualityScore } from './DataQualityService';
 import { Logger } from 'winston';
 
 export interface DataIngestionConfig {
@@ -38,6 +39,11 @@ export interface DataIngestionResult {
   errors: string[];
   source: string;
   timestamp: Date;
+  qualityMetrics?: {
+    averageScore: number;
+    gradeDistribution: { A: number; B: number; C: number; D: number };
+    rejectedDataPoints: number;
+  };
 }
 
 /**
@@ -48,17 +54,20 @@ export class DataIngestionService {
   private openaqClient: OpenAQClient;
   private waterQualityClient: WaterQualityPortalClient;
   private messagePublisher: MessageQueuePublisher;
+  private dataQualityService: DataQualityService;
   private logger: Logger;
   private config: DataIngestionConfig;
 
   constructor(
     config: DataIngestionConfig,
     logger: Logger,
-    messagePublisher: MessageQueuePublisher
+    messagePublisher: MessageQueuePublisher,
+    dataQualityService?: DataQualityService
   ) {
     this.config = config;
     this.logger = logger;
     this.messagePublisher = messagePublisher;
+    this.dataQualityService = dataQualityService || new DataQualityService(logger);
     
     this.openaqClient = new OpenAQClient(
       config.apis.openaq,
@@ -84,18 +93,33 @@ export class DataIngestionService {
       dataPointsProcessed: 0,
       errors: [],
       source: 'openaq',
-      timestamp: new Date()
+      timestamp: new Date(),
+      qualityMetrics: {
+        averageScore: 0,
+        gradeDistribution: { A: 0, B: 0, C: 0, D: 0 },
+        rejectedDataPoints: 0
+      }
     };
 
     try {
       this.logger.info('Starting air quality data ingestion from OpenAQ', { location });
       
       const airQualityData = await this.openaqClient.fetchLatestMeasurements(location);
+      const qualityScores: QualityScore[] = [];
       
       for (const dataPoint of airQualityData) {
         try {
-          await this.processAndPublishDataPoint(dataPoint);
-          result.dataPointsProcessed++;
+          const processResult = await this.processAndPublishDataPoint(dataPoint);
+          if (processResult.accepted) {
+            result.dataPointsProcessed++;
+            qualityScores.push(processResult.qualityScore);
+          } else {
+            result.qualityMetrics!.rejectedDataPoints++;
+            this.logger.warn('Data point rejected due to quality issues', {
+              dataPoint: { source: dataPoint.source, pollutant: dataPoint.pollutant },
+              qualityScore: processResult.qualityScore
+            });
+          }
         } catch (error) {
           const errorMsg = `Failed to process air quality data point: ${error instanceof Error ? error.message : 'Unknown error'}`;
           result.errors.push(errorMsg);
@@ -103,10 +127,20 @@ export class DataIngestionService {
         }
       }
 
+      // Calculate quality metrics
+      if (qualityScores.length > 0) {
+        result.qualityMetrics!.averageScore = qualityScores.reduce((sum, score) => sum + score.overall, 0) / qualityScores.length;
+        for (const score of qualityScores) {
+          result.qualityMetrics!.gradeDistribution[score.grade]++;
+        }
+      }
+
       result.success = result.errors.length === 0 || result.dataPointsProcessed > 0;
       
       this.logger.info('Air quality data ingestion completed', {
         dataPointsProcessed: result.dataPointsProcessed,
+        rejectedDataPoints: result.qualityMetrics!.rejectedDataPoints,
+        averageQualityScore: result.qualityMetrics!.averageScore,
         errors: result.errors.length,
         duration: Date.now() - startTime
       });
@@ -133,18 +167,33 @@ export class DataIngestionService {
       dataPointsProcessed: 0,
       errors: [],
       source: 'water_quality_portal',
-      timestamp: new Date()
+      timestamp: new Date(),
+      qualityMetrics: {
+        averageScore: 0,
+        gradeDistribution: { A: 0, B: 0, C: 0, D: 0 },
+        rejectedDataPoints: 0
+      }
     };
 
     try {
       this.logger.info('Starting water quality data ingestion from Water Quality Portal', { location });
       
       const waterQualityData = await this.waterQualityClient.fetchLatestMeasurements(location);
+      const qualityScores: QualityScore[] = [];
       
       for (const dataPoint of waterQualityData) {
         try {
-          await this.processAndPublishDataPoint(dataPoint);
-          result.dataPointsProcessed++;
+          const processResult = await this.processAndPublishDataPoint(dataPoint);
+          if (processResult.accepted) {
+            result.dataPointsProcessed++;
+            qualityScores.push(processResult.qualityScore);
+          } else {
+            result.qualityMetrics!.rejectedDataPoints++;
+            this.logger.warn('Data point rejected due to quality issues', {
+              dataPoint: { source: dataPoint.source, pollutant: dataPoint.pollutant },
+              qualityScore: processResult.qualityScore
+            });
+          }
         } catch (error) {
           const errorMsg = `Failed to process water quality data point: ${error instanceof Error ? error.message : 'Unknown error'}`;
           result.errors.push(errorMsg);
@@ -152,10 +201,20 @@ export class DataIngestionService {
         }
       }
 
+      // Calculate quality metrics
+      if (qualityScores.length > 0) {
+        result.qualityMetrics!.averageScore = qualityScores.reduce((sum, score) => sum + score.overall, 0) / qualityScores.length;
+        for (const score of qualityScores) {
+          result.qualityMetrics!.gradeDistribution[score.grade]++;
+        }
+      }
+
       result.success = result.errors.length === 0 || result.dataPointsProcessed > 0;
       
       this.logger.info('Water quality data ingestion completed', {
         dataPointsProcessed: result.dataPointsProcessed,
+        rejectedDataPoints: result.qualityMetrics!.rejectedDataPoints,
+        averageQualityScore: result.qualityMetrics!.averageScore,
         errors: result.errors.length,
         duration: Date.now() - startTime
       });
@@ -194,23 +253,64 @@ export class DataIngestionService {
   /**
    * Process and validate environmental data point before publishing
    * Requirement 1.4: Validate and store data with timestamp and location metadata
+   * Requirement 8.1: Data quality validation and scoring
    */
-  private async processAndPublishDataPoint(dataPoint: CreateEnvironmentalDataPoint): Promise<void> {
-    // Validate data point
-    this.validateDataPoint(dataPoint);
+  private async processAndPublishDataPoint(dataPoint: CreateEnvironmentalDataPoint): Promise<{
+    accepted: boolean;
+    qualityScore: QualityScore;
+  }> {
+    // Assess data quality
+    const qualityScore = this.dataQualityService.assessDataQuality(dataPoint);
+    
+    // Check for anomalies
+    const anomalyResult = this.dataQualityService.detectAnomalies(dataPoint);
+    
+    // Determine if data should be accepted
+    let accepted = true;
+    
+    if (anomalyResult.suggestedAction === 'reject') {
+      accepted = false;
+      this.logger.warn('Data point rejected due to anomaly detection', {
+        dataPoint: { source: dataPoint.source, pollutant: dataPoint.pollutant },
+        anomalyReasons: anomalyResult.reasons,
+        confidence: anomalyResult.confidence
+      });
+    } else if (qualityScore.grade === 'D' && qualityScore.overall < 0.3) {
+      accepted = false;
+      this.logger.warn('Data point rejected due to poor quality score', {
+        dataPoint: { source: dataPoint.source, pollutant: dataPoint.pollutant },
+        qualityScore: qualityScore.overall,
+        issues: qualityScore.issues
+      });
+    }
 
-    // Publish to message queue for downstream processing
-    await this.messagePublisher.publishEnvironmentalData(
-      dataPoint,
-      this.config.messageQueue.exchangeName,
-      this.config.messageQueue.routingKey
-    );
+    if (accepted) {
+      // Basic validation (throws on critical errors)
+      this.validateDataPoint(dataPoint);
 
-    this.logger.debug('Environmental data point processed and published', {
-      source: dataPoint.source,
-      pollutant: dataPoint.pollutant,
-      location: dataPoint.location
-    });
+      // Update data point with quality grade
+      const enrichedDataPoint = {
+        ...dataPoint,
+        quality_grade: qualityScore.grade
+      };
+
+      // Publish to message queue for downstream processing
+      await this.messagePublisher.publishEnvironmentalData(
+        enrichedDataPoint,
+        this.config.messageQueue.exchangeName,
+        this.config.messageQueue.routingKey
+      );
+
+      this.logger.debug('Environmental data point processed and published', {
+        source: dataPoint.source,
+        pollutant: dataPoint.pollutant,
+        location: dataPoint.location,
+        qualityGrade: qualityScore.grade,
+        qualityScore: qualityScore.overall
+      });
+    }
+
+    return { accepted, qualityScore };
   }
 
   /**

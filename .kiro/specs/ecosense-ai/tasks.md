@@ -18,14 +18,14 @@
 
 - [x] 3. Build Data Ingestion Service foundation
 
-
   - Create service class structure for external API integration
   - Implement OpenAQ API client with rate limiting and error handling
   - Write Water Quality Portal API client with data validation
   - Create message queue publisher for processed environmental data
   - _Requirements: 1.1, 1.2, 1.3, 7.1_
 
-- [ ] 4. Implement scheduled data ingestion workflows
+- [x] 4. Implement scheduled data ingestion workflows
+
 
   - Create cron job scheduler for hourly data fetching
   - Implement exponential backoff retry logic for API failures

@@ -29,10 +29,14 @@ export function postGISToLocation(geometryString: string): Location {
       .split(' ')
       .map(coord => parseFloat(coord));
     
-    return {
-      longitude: coords[0],
-      latitude: coords[1]
-    };
+    if (coords.length >= 2 && coords[0] !== undefined && coords[1] !== undefined) {
+      return {
+        longitude: coords[0],
+        latitude: coords[1]
+      };
+    }
+    
+    throw new Error('Invalid coordinate format');
   }
   
   // If it's a binary format, we'll need to handle it differently

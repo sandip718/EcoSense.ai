@@ -2,6 +2,7 @@ import { DataIngestionService, DataIngestionConfig } from '../DataIngestionServi
 import { OpenAQClient } from '../clients/OpenAQClient';
 import { WaterQualityPortalClient } from '../clients/WaterQualityPortalClient';
 import { MessageQueuePublisher } from '../messaging/MessageQueuePublisher';
+import { DataQualityService, QualityScore } from '../DataQualityService';
 import { CreateEnvironmentalDataPoint } from '../../models/types';
 import { Logger } from 'winston';
 
@@ -9,11 +10,13 @@ import { Logger } from 'winston';
 jest.mock('../clients/OpenAQClient');
 jest.mock('../clients/WaterQualityPortalClient');
 jest.mock('../messaging/MessageQueuePublisher');
+jest.mock('../DataQualityService');
 
 describe('DataIngestionService', () => {
   let service: DataIngestionService;
   let mockLogger: jest.Mocked<Logger>;
   let mockMessagePublisher: jest.Mocked<MessageQueuePublisher>;
+  let mockDataQualityService: jest.Mocked<DataQualityService>;
   let mockOpenAQClient: jest.Mocked<OpenAQClient>;
   let mockWaterQualityClient: jest.Mocked<WaterQualityPortalClient>;
 
@@ -46,7 +49,7 @@ describe('DataIngestionService', () => {
 
   const mockEnvironmentalData: CreateEnvironmentalDataPoint[] = [
     {
-      source: 'openaq',
+      source: 'openaq' as const,
       pollutant: 'PM2.5',
       value: 25.5,
       unit: 'µg/m³',
@@ -56,10 +59,10 @@ describe('DataIngestionService', () => {
         address: 'Los Angeles, CA'
       },
       timestamp: new Date('2023-01-01T12:00:00Z'),
-      quality_grade: 'A'
+      quality_grade: 'A' as const
     },
     {
-      source: 'water_quality_portal',
+      source: 'water_quality_portal' as const,
       pollutant: 'pH',
       value: 7.2,
       unit: 'pH units',
@@ -69,7 +72,7 @@ describe('DataIngestionService', () => {
         address: 'Los Angeles, CA'
       },
       timestamp: new Date('2023-01-01T12:00:00Z'),
-      quality_grade: 'B'
+      quality_grade: 'B' as const
     }
   ];
 
@@ -88,8 +91,24 @@ describe('DataIngestionService', () => {
       healthCheck: jest.fn().mockResolvedValue(true)
     } as any;
 
+    // Create mock data quality service
+    mockDataQualityService = {
+      assessDataQuality: jest.fn().mockReturnValue({
+        overall: 0.9,
+        components: { completeness: 0.9, accuracy: 0.9, timeliness: 0.9, consistency: 0.9 },
+        grade: 'A',
+        issues: []
+      } as QualityScore),
+      detectAnomalies: jest.fn().mockReturnValue({
+        isAnomaly: false,
+        confidence: 0.1,
+        reasons: [],
+        suggestedAction: 'accept'
+      })
+    } as any;
+
     // Create service instance
-    service = new DataIngestionService(mockConfig, mockLogger, mockMessagePublisher);
+    service = new DataIngestionService(mockConfig, mockLogger, mockMessagePublisher, mockDataQualityService);
 
     // Get mocked client instances
     mockOpenAQClient = (service as any).openaqClient;
@@ -111,9 +130,13 @@ describe('DataIngestionService', () => {
       expect(result.dataPointsProcessed).toBe(1);
       expect(result.errors).toHaveLength(0);
       expect(result.source).toBe('openaq');
+      expect(result.qualityMetrics).toBeDefined();
+      expect(result.qualityMetrics!.averageScore).toBeGreaterThan(0);
       expect(mockOpenAQClient.fetchLatestMeasurements).toHaveBeenCalledWith(undefined);
+      expect(mockDataQualityService.assessDataQuality).toHaveBeenCalledWith(airQualityData[0]);
+      expect(mockDataQualityService.detectAnomalies).toHaveBeenCalledWith(airQualityData[0]);
       expect(mockMessagePublisher.publishEnvironmentalData).toHaveBeenCalledWith(
-        airQualityData[0],
+        { ...airQualityData[0], quality_grade: 'A' },
         'environmental_data',
         'environmental.data'
       );
@@ -153,6 +176,77 @@ describe('DataIngestionService', () => {
       expect(result.dataPointsProcessed).toBe(0);
       expect(result.errors).toHaveLength(1);
       expect(result.errors[0]).toContain('Failed to process air quality data point');
+    });
+
+    it('should reject data points flagged by anomaly detection', async () => {
+      const airQualityData = [mockEnvironmentalData[0]];
+      mockOpenAQClient.fetchLatestMeasurements.mockResolvedValue(airQualityData);
+      
+      // Mock anomaly detection to reject the data
+      mockDataQualityService.detectAnomalies.mockReturnValue({
+        isAnomaly: true,
+        confidence: 0.9,
+        reasons: ['Extreme value detected'],
+        suggestedAction: 'reject'
+      });
+
+      const result = await service.ingestAirQualityData();
+
+      expect(result.success).toBe(true); // Overall success but with rejections
+      expect(result.dataPointsProcessed).toBe(0);
+      expect(result.qualityMetrics!.rejectedDataPoints).toBe(1);
+      expect(mockMessagePublisher.publishEnvironmentalData).not.toHaveBeenCalled();
+    });
+
+    it('should reject data points with very poor quality scores', async () => {
+      const airQualityData = [mockEnvironmentalData[0]];
+      mockOpenAQClient.fetchLatestMeasurements.mockResolvedValue(airQualityData);
+      
+      // Mock very poor quality score
+      mockDataQualityService.assessDataQuality.mockReturnValue({
+        overall: 0.2,
+        components: { completeness: 0.2, accuracy: 0.2, timeliness: 0.2, consistency: 0.2 },
+        grade: 'D',
+        issues: ['Multiple validation errors']
+      });
+
+      const result = await service.ingestAirQualityData();
+
+      expect(result.success).toBe(true);
+      expect(result.dataPointsProcessed).toBe(0);
+      expect(result.qualityMetrics!.rejectedDataPoints).toBe(1);
+      expect(mockMessagePublisher.publishEnvironmentalData).not.toHaveBeenCalled();
+    });
+
+    it('should calculate quality metrics correctly', async () => {
+      const airQualityData = [
+        { ...mockEnvironmentalData[0], pollutant: 'PM2.5' },
+        { ...mockEnvironmentalData[0], pollutant: 'NO2' }
+      ];
+      mockOpenAQClient.fetchLatestMeasurements.mockResolvedValue(airQualityData);
+      
+      // Mock different quality scores
+      mockDataQualityService.assessDataQuality
+        .mockReturnValueOnce({
+          overall: 0.9,
+          components: { completeness: 0.9, accuracy: 0.9, timeliness: 0.9, consistency: 0.9 },
+          grade: 'A',
+          issues: []
+        })
+        .mockReturnValueOnce({
+          overall: 0.7,
+          components: { completeness: 0.7, accuracy: 0.7, timeliness: 0.7, consistency: 0.7 },
+          grade: 'B',
+          issues: []
+        });
+
+      const result = await service.ingestAirQualityData();
+
+      expect(result.success).toBe(true);
+      expect(result.dataPointsProcessed).toBe(2);
+      expect(result.qualityMetrics!.averageScore).toBe(0.8); // (0.9 + 0.7) / 2
+      expect(result.qualityMetrics!.gradeDistribution.A).toBe(1);
+      expect(result.qualityMetrics!.gradeDistribution.B).toBe(1);
     });
   });
 
@@ -196,10 +290,10 @@ describe('DataIngestionService', () => {
       const results = await service.ingestAllSources();
 
       expect(results).toHaveLength(2);
-      expect(results[0].source).toBe('openaq');
-      expect(results[1].source).toBe('water_quality_portal');
-      expect(results[0].success).toBe(true);
-      expect(results[1].success).toBe(true);
+      expect(results[0]?.source).toBe('openaq');
+      expect(results[1]?.source).toBe('water_quality_portal');
+      expect(results[0]?.success).toBe(true);
+      expect(results[1]?.success).toBe(true);
     });
 
     it('should skip disabled sources', async () => {
@@ -225,7 +319,7 @@ describe('DataIngestionService', () => {
       const results = await serviceWithDisabledWater.ingestAllSources();
 
       expect(results).toHaveLength(1);
-      expect(results[0].source).toBe('openaq');
+      expect(results[0]?.source).toBe('openaq');
     });
   });
 
@@ -255,7 +349,7 @@ describe('DataIngestionService', () => {
     });
 
     it('should accept valid data points', async () => {
-      const validData = mockEnvironmentalData[0];
+      const validData = mockEnvironmentalData[0]!;
       mockOpenAQClient.fetchLatestMeasurements.mockResolvedValue([validData]);
 
       const result = await service.ingestAirQualityData();
