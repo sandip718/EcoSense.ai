@@ -2,10 +2,12 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import dotenv from 'dotenv';
+import path from 'path';
 import { logger } from './utils/logger';
 import { connectDatabase } from './config/database';
 import { connectRedis } from './config/redis';
 import { errorHandler } from './middleware/errorHandler';
+import imageAnalysisRoutes from './routes/imageAnalysis';
 
 // Load environment variables
 dotenv.config();
@@ -18,6 +20,13 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
+
+// Serve static files for uploaded images
+const uploadsPath = process.env.STORAGE_LOCAL_PATH || './uploads/images';
+app.use('/uploads/images', express.static(path.resolve(uploadsPath)));
+
+// API Routes
+app.use('/api/images', imageAnalysisRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
