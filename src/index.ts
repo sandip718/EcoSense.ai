@@ -8,6 +8,10 @@ import { connectDatabase } from './config/database';
 import { connectRedis } from './config/redis';
 import { errorHandler } from './middleware/errorHandler';
 import imageAnalysisRoutes from './routes/imageAnalysis';
+import insightsRoutes from './routes/insights';
+import recommendationsRoutes from './routes/recommendations';
+import authRoutes from './routes/auth';
+import gamificationRoutes from './routes/gamification';
 
 // Load environment variables
 dotenv.config();
@@ -27,6 +31,10 @@ app.use('/uploads/images', express.static(path.resolve(uploadsPath)));
 
 // API Routes
 app.use('/api/images', imageAnalysisRoutes);
+app.use('/api/insights', insightsRoutes);
+app.use('/api/recommendations', recommendationsRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/gamification', gamificationRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {

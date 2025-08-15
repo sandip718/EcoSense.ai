@@ -364,3 +364,83 @@ export function validatePollutantRange(pollutant: string, value: number, unit: s
     errors
   };
 }
+
+/**
+ * Validate location coordinates
+ * @param location Location object with latitude and longitude
+ * @returns True if location is valid
+ */
+export function validateLocation(location: Location): boolean {
+  if (!location || typeof location !== 'object') {
+    return false;
+  }
+
+  const { latitude, longitude } = location;
+
+  // Check if latitude and longitude are numbers
+  if (typeof latitude !== 'number' || typeof longitude !== 'number') {
+    return false;
+  }
+
+  // Check if values are within valid ranges and not NaN
+  if (isNaN(latitude) || isNaN(longitude)) {
+    return false;
+  }
+
+  // Validate latitude range (-90 to 90)
+  if (latitude < -90 || latitude > 90) {
+    return false;
+  }
+
+  // Validate longitude range (-180 to 180)
+  if (longitude < -180 || longitude > 180) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Validate time range
+ * @param timeRange Object with start and end dates
+ * @returns True if time range is valid
+ */
+export function validateTimeRange(timeRange: { start: Date; end: Date }): boolean {
+  if (!timeRange || typeof timeRange !== 'object') {
+    return false;
+  }
+
+  const { start, end } = timeRange;
+
+  // Check if start and end are valid Date objects
+  if (!(start instanceof Date) || !(end instanceof Date)) {
+    return false;
+  }
+
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    return false;
+  }
+
+  // Check if end date is after start date
+  if (end <= start) {
+    return false;
+  }
+
+  // Check if dates are not too far in the past (more than 10 years)
+  const tenYearsAgo = new Date();
+  tenYearsAgo.setFullYear(tenYearsAgo.getFullYear() - 10);
+  
+  if (start < tenYearsAgo) {
+    return false;
+  }
+
+  // Check if dates are not too far in the future (more than 1 day)
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  
+  if (end > tomorrow) {
+    return false;
+  }
+
+  return true;
+}

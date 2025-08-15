@@ -8,6 +8,7 @@ export * from './types';
 export { EnvironmentalDataRepository } from './EnvironmentalDataRepository';
 export { UserRepository } from './UserRepository';
 export { ImageAnalysisRepository } from './ImageAnalysisRepository';
+export { CommunityRecommendationRepository } from './CommunityRecommendationRepository';
 
 // Utility functions
 export * from '../utils/geometry';

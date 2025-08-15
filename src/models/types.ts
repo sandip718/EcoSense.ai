@@ -229,6 +229,89 @@ export interface DatabaseImageAnalysis {
   created_at: Date;
 }
 
+// Community Recommendation System types
+export interface CommunityRecommendation {
+  id: string;
+  location: Location & { radius: number };
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  category: 'immediate_action' | 'long_term_strategy' | 'monitoring';
+  title: string;
+  description: string;
+  steps: string[];
+  estimated_impact: number; // 0-100 scale
+  feasibility_score: number; // 0-100 scale
+  target_pollutants: string[];
+  estimated_cost?: string | undefined;
+  time_to_implement?: string | undefined;
+  success_metrics: string[];
+  created_at: Date;
+  updated_at: Date;
+  expires_at?: Date | undefined;
+}
+
+export interface CreateCommunityRecommendation {
+  location: Location & { radius: number };
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  category: 'immediate_action' | 'long_term_strategy' | 'monitoring';
+  title: string;
+  description: string;
+  steps: string[];
+  estimated_impact: number;
+  feasibility_score: number;
+  target_pollutants: string[];
+  estimated_cost?: string;
+  time_to_implement?: string;
+  success_metrics: string[];
+  expires_at?: Date;
+}
+
+export interface RecommendationQuery {
+  location?: {
+    latitude: number;
+    longitude: number;
+    radius_km: number;
+  };
+  priority?: ('low' | 'medium' | 'high' | 'urgent')[];
+  category?: ('immediate_action' | 'long_term_strategy' | 'monitoring')[];
+  target_pollutants?: string[];
+  active_only?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export interface RecommendationAnalysisInput {
+  location: Location;
+  radius_km: number;
+  current_conditions: EnvironmentalDataPoint[];
+  trend_analysis?: any;
+  community_profile?: {
+    population_density: number;
+    economic_level: 'low' | 'medium' | 'high';
+    infrastructure_quality: 'poor' | 'fair' | 'good' | 'excellent';
+    environmental_awareness: number; // 0-100 scale
+  };
+}
+
+export interface DatabaseCommunityRecommendation {
+  id: string;
+  location: string; // PostGIS geometry as string
+  radius: number;
+  priority: string;
+  category: string;
+  title: string;
+  description: string;
+  steps: string[];
+  estimated_impact: number;
+  feasibility_score: number;
+  target_pollutants: string[];
+  estimated_cost: string | null;
+  time_to_implement: string | null;
+  success_metrics: string[];
+  created_at: Date;
+  updated_at: Date;
+  expires_at: Date | null;
+}
+
 // Utility types for API responses
 export interface PaginatedResponse<T> {
   data: T[];
