@@ -12,6 +12,10 @@ import insightsRoutes from './routes/insights';
 import recommendationsRoutes from './routes/recommendations';
 import authRoutes from './routes/auth';
 import gamificationRoutes from './routes/gamification';
+import environmentalDataRoutes from './routes/environmentalData';
+import dashboardRoutes from './routes/dashboard';
+import notificationRoutes from './routes/notifications';
+import { notificationWorker } from './services/NotificationWorker';
 
 // Load environment variables
 dotenv.config();
@@ -35,6 +39,9 @@ app.use('/api/insights', insightsRoutes);
 app.use('/api/recommendations', recommendationsRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/gamification', gamificationRoutes);
+app.use('/api/environmental-data', environmentalDataRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -59,6 +66,10 @@ async function startServer(): Promise<void> {
     await connectRedis();
     logger.info('Redis connected successfully');
 
+    // Start notification worker
+    notificationWorker.start();
+    logger.info('Notification worker started');
+
     app.listen(PORT, () => {
       logger.info(`EcoSense.ai server running on port ${PORT}`);
     });
@@ -71,11 +82,13 @@ async function startServer(): Promise<void> {
 // Graceful shutdown
 process.on('SIGTERM', () => {
   logger.info('SIGTERM received, shutting down gracefully');
+  notificationWorker.stop();
   process.exit(0);
 });
 
 process.on('SIGINT', () => {
   logger.info('SIGINT received, shutting down gracefully');
+  notificationWorker.stop();
   process.exit(0);
 });
 

@@ -348,6 +348,40 @@ export class UserRepository {
   }
 
   /**
+   * Find users near a location
+   * @param location Center location
+   * @param radiusKm Radius in kilometers
+   * @param limit Maximum number of users to return
+   * @returns Array of nearby users
+   */
+  async findNearby(location: Location, radiusKm: number, limit: number = 100): Promise<UserProfile[]> {
+    const client = await this.db.connect();
+    
+    try {
+      const query = `
+        SELECT id, email, password_hash, ST_AsText(location) as location, 
+               preferences, points, level, badges, contribution_streak, created_at, updated_at,
+               ST_Distance(location, ST_SetSRID(ST_GeomFromText($1), 4326)::geography) / 1000 as distance_km
+        FROM users 
+        WHERE location IS NOT NULL
+          AND ST_DWithin(location, ST_SetSRID(ST_GeomFromText($1), 4326)::geography, $2 * 1000)
+        ORDER BY distance_km ASC
+        LIMIT $3
+      `;
+
+      const centerPoint = locationToPostGIS(location);
+      const result = await client.query(query, [centerPoint, radiusKm, limit]);
+      
+      return result.rows.map((row: DatabaseUser) => this.mapDatabaseToModel(row));
+    } catch (error) {
+      logger.error('Error finding nearby users:', error);
+      throw new Error('Failed to find nearby users');
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
    * Map database row to model interface
    * @param row Database row
    * @returns User profile model

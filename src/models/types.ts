@@ -155,6 +155,101 @@ export interface CreateNotification {
   expires_at?: Date;
 }
 
+// Notification system types for real-time notifications
+export interface NotificationRule {
+  id: string;
+  user_id: string;
+  location: Location & { radius: number };
+  triggers: {
+    pollutant_thresholds: { [pollutant: string]: number };
+    trend_alerts: boolean;
+    community_updates: boolean;
+    health_warnings: boolean;
+  };
+  delivery_methods: ('push' | 'email' | 'sms')[];
+  active: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface CreateNotificationRule {
+  user_id: string;
+  location: Location & { radius: number };
+  triggers: {
+    pollutant_thresholds: { [pollutant: string]: number };
+    trend_alerts: boolean;
+    community_updates: boolean;
+    health_warnings: boolean;
+  };
+  delivery_methods: ('push' | 'email' | 'sms')[];
+  active?: boolean;
+}
+
+export interface Alert {
+  id: string;
+  type: 'health_warning' | 'trend_alert' | 'community_update' | 'threshold_breach';
+  severity: 'info' | 'warning' | 'critical';
+  title: string;
+  message: string;
+  location: Location;
+  affected_radius: number;
+  pollutant?: string;
+  current_value?: number;
+  threshold_value?: number;
+  expires_at: Date;
+  created_at: Date;
+}
+
+export interface CreateAlert {
+  type: 'health_warning' | 'trend_alert' | 'community_update' | 'threshold_breach';
+  severity: 'info' | 'warning' | 'critical';
+  title: string;
+  message: string;
+  location: Location;
+  affected_radius: number;
+  pollutant?: string;
+  current_value?: number;
+  threshold_value?: number;
+  expires_at: Date;
+}
+
+export interface PushNotificationPayload {
+  user_id: string;
+  device_token?: string;
+  title: string;
+  body: string;
+  data?: {
+    alert_id?: string;
+    location?: Location;
+    severity?: string;
+    type?: string;
+  };
+  priority: 'normal' | 'high';
+}
+
+export interface NotificationQueueItem {
+  id: string;
+  alert: Alert;
+  target_users: string[];
+  delivery_methods: ('push' | 'email' | 'sms')[];
+  retry_count: number;
+  max_retries: number;
+  scheduled_at: Date;
+  created_at: Date;
+}
+
+export interface DatabaseNotificationRule {
+  id: string;
+  user_id: string;
+  location: string; // PostGIS geometry as string
+  radius: number;
+  triggers: any; // JSONB
+  delivery_methods: string[];
+  active: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
 // Query interfaces for database operations
 export interface EnvironmentalDataQuery {
   pollutant?: string;
