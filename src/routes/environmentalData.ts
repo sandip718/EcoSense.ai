@@ -6,6 +6,11 @@ import { EnvironmentalDataRepository } from '../models/EnvironmentalDataReposito
 import { validateLocation, validateTimeRange } from '../utils/validation';
 import { logger } from '../utils/logger';
 import { ApiResponse, EnvironmentalDataQuery, PaginatedResponse, EnvironmentalDataPoint } from '../models/types';
+import { 
+  cacheEnvironmentalData, 
+  addCacheHeaders, 
+  handleConditionalRequests 
+} from '../middleware/cache';
 
 const router = Router();
 const environmentalDataRepository = new EnvironmentalDataRepository();
@@ -25,7 +30,11 @@ const environmentalDataRepository = new EnvironmentalDataRepository();
  * - limit: number of results (optional, default: 50, max: 1000)
  * - offset: pagination offset (optional, default: 0)
  */
-router.get('/', async (req: Request, res: Response): Promise<void> => {
+router.get('/', 
+  handleConditionalRequests(),
+  addCacheHeaders(300), // 5 minutes cache
+  cacheEnvironmentalData({ ttl: 300, trackAccess: true }),
+  async (req: Request, res: Response): Promise<void> => {
   try {
     const {
       lat,
@@ -206,7 +215,11 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
  * - radius: radius in km (optional, default: 5)
  * - pollutant: pollutant type (required)
  */
-router.get('/latest', async (req: Request, res: Response): Promise<void> => {
+router.get('/latest',
+  handleConditionalRequests(),
+  addCacheHeaders(180), // 3 minutes cache for latest data
+  cacheEnvironmentalData({ ttl: 180, trackAccess: true }),
+  async (req: Request, res: Response): Promise<void> => {
   try {
     const { lat, lng, radius = 5, pollutant } = req.query;
 
@@ -303,7 +316,11 @@ router.get('/latest', async (req: Request, res: Response): Promise<void> => {
  * - start: start date (ISO string, optional, default: 24 hours ago)
  * - end: end date (ISO string, optional, default: now)
  */
-router.get('/summary', async (req: Request, res: Response): Promise<void> => {
+router.get('/summary',
+  handleConditionalRequests(),
+  addCacheHeaders(600), // 10 minutes cache for summaries
+  cacheEnvironmentalData({ ttl: 600, trackAccess: true }),
+  async (req: Request, res: Response): Promise<void> => {
   try {
     const { lat, lng, radius = 10, start, end } = req.query;
 

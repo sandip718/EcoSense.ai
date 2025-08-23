@@ -5,6 +5,11 @@ import { Router, Request, Response } from 'express';
 import { InsightsEngine } from '../services/InsightsEngine';
 import { logger } from '../utils/logger';
 import { validateLocation, validateTimeRange } from '../utils/validation';
+import { 
+  cacheTrendAnalysis, 
+  addCacheHeaders, 
+  handleConditionalRequests 
+} from '../middleware/cache';
 
 const router = Router();
 const insightsEngine = new InsightsEngine();
@@ -20,7 +25,11 @@ const insightsEngine = new InsightsEngine();
  * - start: start date (ISO string, required)
  * - end: end date (ISO string, required)
  */
-router.get('/trends', async (req: Request, res: Response): Promise<void> => {
+router.get('/trends',
+  handleConditionalRequests(),
+  addCacheHeaders(1800), // 30 minutes cache
+  cacheTrendAnalysis({ ttl: 1800 }),
+  async (req: Request, res: Response): Promise<void> => {
   try {
     const { lat, lng, radius = 5, pollutant, start, end } = req.query;
 

@@ -10,6 +10,11 @@ import { authenticate, AuthenticatedRequest } from '../middleware/auth';
 import { validateLocation } from '../utils/validation';
 import { logger } from '../utils/logger';
 import { ApiResponse, EnvironmentalDataQuery, ImageAnalysisQuery, RecommendationQuery } from '../models/types';
+import { 
+  cacheUserDashboard, 
+  addCacheHeaders, 
+  handleConditionalRequests 
+} from '../middleware/cache';
 
 const router = Router();
 const environmentalDataRepository = new EnvironmentalDataRepository();
@@ -23,7 +28,12 @@ const userRepository = new UserRepository();
  * Query parameters:
  * - radius: radius in km for location-based data (optional, default: 10)
  */
-router.get('/overview', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+router.get('/overview', 
+  authenticate,
+  handleConditionalRequests(),
+  addCacheHeaders(600), // 10 minutes cache
+  cacheUserDashboard({ ttl: 600 }),
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const user = req.user;
     const radius = parseFloat(req.query.radius as string) || 10;
@@ -214,7 +224,12 @@ router.get('/overview', authenticate, async (req: AuthenticatedRequest, res: Res
  * - radius: radius in km (optional, default: 10)
  * - hours: time range in hours (optional, default: 24)
  */
-router.get('/environmental-summary', authenticate, async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+router.get('/environmental-summary', 
+  authenticate,
+  handleConditionalRequests(),
+  addCacheHeaders(900), // 15 minutes cache
+  cacheUserDashboard({ ttl: 900 }),
+  async (req: AuthenticatedRequest, res: Response): Promise<void> => {
   try {
     const user = req.user;
     const { lat, lng, radius = 10, hours = 24 } = req.query;

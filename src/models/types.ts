@@ -407,6 +407,38 @@ export interface DatabaseCommunityRecommendation {
   expires_at: Date | null;
 }
 
+// Trend Analysis types for insights engine
+export interface TrendAnalysis {
+  pollutant: string;
+  location: Location;
+  timeframe: {
+    start: Date;
+    end: Date;
+  };
+  trend: {
+    direction: 'improving' | 'worsening' | 'stable';
+    magnitude: number; // percentage change
+    confidence: number; // 0-1 scale
+  };
+  statistics: {
+    current_average: number;
+    previous_average: number;
+    min_value: number;
+    max_value: number;
+    data_points: number;
+  };
+  forecast?: {
+    next_24h: number;
+    next_week: number;
+    confidence: number;
+  };
+  analysis_metadata: {
+    model_version: string;
+    processing_time_ms: number;
+    data_quality_score: number;
+  };
+}
+
 // Utility types for API responses
 export interface PaginatedResponse<T> {
   data: T[];

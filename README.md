@@ -63,16 +63,24 @@ docker-compose -f docker-compose.yml -f docker-compose.dev.yml up -d
 npm run migrate
 ```
 
-6. Start the development server:
+6. Start the backend development server:
 ```bash
 npm run dev
 ```
 
-The application will be available at `http://localhost:3000`.
+7. Start the frontend dashboard (in a new terminal):
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The backend API will be available at `http://localhost:8000` and the frontend dashboard at `http://localhost:3000`.
 
 ### Development Services
 
-- **Application**: http://localhost:3000
+- **Frontend Dashboard**: http://localhost:3000
+- **Backend API**: http://localhost:8000
 - **Database Admin (Adminer)**: http://localhost:8080
 - **RabbitMQ Management**: http://localhost:15672
 - **MailHog (Email testing)**: http://localhost:8025
@@ -80,7 +88,7 @@ The application will be available at `http://localhost:3000`.
 ## Project Structure
 
 ```
-src/
+src/                 # Backend source code
 ├── config/          # Configuration files
 ├── middleware/      # Express middleware
 ├── models/          # Data models and types
@@ -88,6 +96,15 @@ src/
 ├── services/        # Business logic services
 ├── utils/           # Utility functions
 └── test/            # Test setup and utilities
+
+frontend/            # Frontend React dashboard
+├── src/
+│   ├── components/  # React components
+│   ├── pages/       # Page components
+│   ├── services/    # API services
+│   └── types/       # TypeScript types
+├── public/          # Static assets
+└── package.json     # Frontend dependencies
 
 database/
 ├── init.sql         # Database initialization

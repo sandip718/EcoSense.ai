@@ -15,7 +15,10 @@ import gamificationRoutes from './routes/gamification';
 import environmentalDataRoutes from './routes/environmentalData';
 import dashboardRoutes from './routes/dashboard';
 import notificationRoutes from './routes/notifications';
+import cacheRoutes from './routes/cache';
+import chatbotRoutes from './routes/chatbot';
 import { notificationWorker } from './services/NotificationWorker';
+import { cacheIntegrationService } from './services/CacheIntegrationService';
 
 // Load environment variables
 dotenv.config();
@@ -42,6 +45,8 @@ app.use('/api/gamification', gamificationRoutes);
 app.use('/api/environmental-data', environmentalDataRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/cache', cacheRoutes);
+app.use('/api/chatbot', chatbotRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -65,6 +70,10 @@ async function startServer(): Promise<void> {
     // Initialize Redis connection
     await connectRedis();
     logger.info('Redis connected successfully');
+
+    // Initialize cache integration service
+    await cacheIntegrationService.initialize();
+    logger.info('Cache integration service initialized');
 
     // Start notification worker
     notificationWorker.start();

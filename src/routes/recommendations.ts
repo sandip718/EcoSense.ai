@@ -6,6 +6,11 @@ import { CommunityRecommendationService } from '../services/CommunityRecommendat
 import { validateRequest } from '../utils/validation';
 import { logger } from '../utils/logger';
 import { ApiResponse, RecommendationQuery, RecommendationAnalysisInput } from '../models/types';
+import { 
+  cacheRecommendations, 
+  addCacheHeaders, 
+  handleConditionalRequests 
+} from '../middleware/cache';
 
 const router = Router();
 const recommendationService = new CommunityRecommendationService();
@@ -15,7 +20,11 @@ const recommendationService = new CommunityRecommendationService();
  * Get recommendations based on query parameters
  * Requirement 4.1: Retrieve location-specific recommendations
  */
-router.get('/', async (req: Request, res: Response) => {
+router.get('/',
+  handleConditionalRequests(),
+  addCacheHeaders(1800), // 30 minutes cache
+  cacheRecommendations({ ttl: 1800, trackAccess: true }),
+  async (req: Request, res: Response) => {
   try {
     const query: RecommendationQuery = {
       location: req.query.lat && req.query.lng && req.query.radius ? {
